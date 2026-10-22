@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel de Dados</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={darkMode:'class'}</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--bd:#e2e8f0;--tx:#0f172a;--mu:#64748b;--ac:#0f766e;--sf:#f1f5f9}
+.dark{--bg:#0b1220;--card:#131c2e;--bd:#25324a;--tx:#e6edf7;--mu:#8fa0b8;--ac:#2dd4bf;--sf:#192438}
+body{background:var(--bg);color:var(--tx);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px}
+.mu{color:var(--mu)}.ac{color:var(--ac)}
+.ctl{background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:.4rem .6rem;font-size:.8rem;width:100%;color:var(--tx);min-width:0}
+.ctl:focus,.btn:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+.lbl{display:block;font-size:.7rem;color:var(--mu);margin-bottom:.2rem}
+.btn{background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:.4rem .75rem;font-size:.8rem;cursor:pointer;color:var(--tx)}
+.btn:hover{border-color:var(--ac)}.btn.p{background:var(--ac);color:#fff;border-color:var(--ac)}.dark .btn.p{color:#04201c}
+th{cursor:pointer;white-space:nowrap;position:sticky;top:0;background:var(--sf);font-weight:600;text-align:left;padding:.5rem .75rem;font-size:.75rem}
+td{padding:.4rem .75rem;border-top:1px solid var(--bd);font-size:.8rem;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar{height:6px;border-radius:3px;background:var(--ac)}
+.cv{position:relative;height:260px}
+@media print{@page{size:A4 landscape;margin:10mm}.noprint{display:none!important}body{background:#fff}.card{break-inside:avoid}.tw{max-height:none!important;overflow:visible!important}}
+</style>
+</head>
+<body>
+<header class="noprint sticky top-0 z-20 border-b" style="background:var(--card);border-color:var(--bd)">
+ <div class="max-w-[1500px] mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
+  <div class="mr-auto"><div class="font-semibold text-base">Painel de dados</div><div id="fname" class="text-xs mu">Nenhum arquivo carregado</div></div>
+  <div id="shw" class="hidden w-48"><select id="sheet" class="ctl" aria-label="Aba"></select></div>
+  <label class="btn p">Abrir arquivo<input id="file" type="file" accept=".xlsx,.xls,.csv,.txt" class="hidden"></label>
+  <button class="btn" id="bx">Exportar Excel</button>
+  <button class="btn" id="bp">Exportar PDF</button>
+  <button class="btn" id="bt" aria-label="Alternar modo escuro">Modo escuro</button>
+ </div>
+</header>
+
+<main class="max-w-[1500px] mx-auto px-4 py-5 space-y-5">
+ <section id="drop" class="card noprint text-center py-20 px-6" style="border-style:dashed">
+  <h1 class="text-xl font-semibold">Arraste uma planilha aqui</h1>
+  <p class="mu text-sm mt-2 max-w-md mx-auto">Aceita .xlsx, .xls e .csv. O painel identifica colunas numéricas, datas e categorias e monta KPIs, gráficos e tabela automaticamente. Tudo roda no seu navegador.</p>
+  <label class="btn p inline-block mt-5">Escolher arquivo<input id="file2" type="file" accept=".xlsx,.xls,.csv,.txt" class="hidden"></label>
+ </section>
+
+ <div id="app" class="hidden space-y-5">
+  <section class="card p-4 noprint">
+   <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3" id="ana"></div>
+  </section>
+  <section class="card p-4 noprint">
+   <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3" id="flt"></div>
+   <div class="mt-3 flex flex-wrap items-center gap-3">
+    <input id="q" data-k="q" class="ctl" style="max-width:340px" type="search" placeholder="Busca rápida em todas as colunas" aria-label="Busca rápida">
+    <button class="btn" id="clr">Limpar filtros</button>
+    <span id="cnt" class="text-xs mu"></span>
+   </div>
+  </section>
+
+  <section id="kpi" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3"></section>
+
+  <section class="grid lg:grid-cols-3 gap-5">
+   <div class="card p-4 lg:col-span-2"><h2 class="font-semibold text-sm mb-2" id="t1"></h2><div class="cv"><canvas id="c1"></canvas></div></div>
+   <div class="card p-4"><h2 class="font-semibold text-sm mb-2" id="t2"></h2><div class="cv"><canvas id="c2"></canvas></div></div>
+  </section>
+
+  <section class="grid lg:grid-cols-3 gap-5">
+   <div class="card p-4 lg:col-span-2"><h2 class="font-semibold text-sm mb-2" id="t3"></h2><div class="cv"><canvas id="c3"></canvas></div></div>
+   <div class="card p-4"><h2 class="font-semibold text-sm mb-3" id="t4"></h2><div id="rank" class="space-y-2.5"></div></div>
+  </section>
+
+  <section class="card p-4">
+   <h2 class="font-semibold text-sm mb-2">Comparativo por período</h2>
+   <div class="overflow-x-auto"><table class="w-full" id="cmp"></table></div>
+  </section>
+
+  <section class="card">
+   <div class="p-4 flex flex-wrap items-center gap-3 noprint"><h2 class="font-semibold text-sm mr-auto">Dados</h2>
+    <label class="text-xs mu flex items-center gap-2">Linhas por página <select data-k="ps" class="ctl" style="width:auto"><option>10</option><option>25</option><option>50</option><option>100</option></select></label></div>
+   <div class="tw overflow-auto" style="max-height:560px"><table class="w-full" id="tbl"></table></div>
+   <div class="p-3 flex flex-wrap items-center justify-between gap-2 noprint" id="pg"></div>
+  </section>
+ </div>
+</main>
+<div id="toast" class="noprint fixed bottom-4 left-1/2 -translate-x-1/2 card px-4 py-2 text-sm hidden z-30"></div>
+
+<script>
+const $=s=>document.querySelector(s),PAL=['#0f766e','#d97706','#4f46e5','#e11d48','#0891b2','#65a30d','#9333ea','#64748b'];
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const opt=(v,t,s)=>`<option value="${esc(v)}"${s?' selected':''}>${esc(t)}</option>`;
+const FLT=['q','dc','dfrom','dto','nc','nmin','nmax'],charts={},SM=new WeakMap();
+let S={rows:[],cols:[],f:[]},T,wbk;
+
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.remove('hidden');setTimeout(()=>t.classList.add('hidden'),4000)}
+const isDark=()=>document.documentElement.classList.contains('dark');
+function setDark(d){document.documentElement.classList.toggle('dark',d);$('#bt').textContent=d?'Modo claro':'Modo escuro';try{localStorage.setItem('dark',d?1:0)}catch(e){}}
+try{const sv=localStorage.getItem('dark');setDark(sv===null?matchMedia('(prefers-color-scheme:dark)').matches:sv==='1')}catch(e){setDark(false)}
+$('#bt').onclick=()=>{setDark(!isDark());if(S.rows.length)render()};
+
+/* ---------- leitura ---------- */
+function loadFile(file){
+ if(!file)return;const csv=/\.(csv|txt)$/i.test(file.name),r=new FileReader();
+ r.onload=e=>{try{
+  wbk=XLSX.read(e.target.result,{type:csv?'string':'array',cellDates:true});
+  $('#fname').textContent=file.name;$('#sheet').innerHTML=wbk.SheetNames.map(n=>opt(n,n)).join('');
+  $('#shw').classList.toggle('hidden',wbk.SheetNames.length<2);
+  const ini=wbk.SheetNames.find(n=>/atividades\s*micro/i.test(n))||wbk.SheetNames[0];$('#sheet').value=ini;useSheet(ini);
+ }catch(err){toast('Não foi possível ler o arquivo: '+err.message)}};
+ csv?r.readAsText(file):r.readAsArrayBuffer(file);
+}
+$('#file').onchange=$('#file2').onchange=e=>loadFile(e.target.files[0]);
+$('#sheet').onchange=e=>useSheet(e.target.value);
+addEventListener('dragover',e=>e.preventDefault());
+addEventListener('drop',e=>{e.preventDefault();loadFile(e.dataTransfer.files[0])});
+
+function parseSheet(ws){
+ const a=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null,blankrows:false});if(!a.length)return null;
+ const cnt=r=>r.filter(v=>v!==null&&v!=='').length,str=r=>r.filter(v=>typeof v==='string'&&v.trim()).length;
+ const lim=Math.min(a.length,25),mx=Math.max(...a.slice(0,lim).map(cnt));let h=0;
+ for(let i=0;i<lim;i++){const c=cnt(a[i]);if(c>=mx*.8&&c>=2&&str(a[i])>=c*.7){h=i;break}}
+ const w=Math.max(...a.slice(h).map(r=>r.length)),used={},names=[];
+ for(let j=0;j<w;j++){let n=a[h][j]==null?'':String(a[h][j]).trim();if(!n)n='Coluna '+(j+1);if(used[n])n+=' ('+(++used[n])+')';else used[n]=1;names.push(n)}
+ const body=a.slice(h+1).filter(r=>cnt(r)>=Math.max(1,Math.ceil(w*.15)));
+ const keep=names.map((n,j)=>body.some(r=>r[j]!=null&&r[j]!==''));
+ const nm=names.filter((_,j)=>keep[j]);
+ const rows=body.map(r=>{const o={};nm.forEach((n,k)=>{const j=names.indexOf(n);o[n]=r[j]===''?null:r[j]});return o});
+ const cols=nm.map(n=>{
+  const v=rows.map(r=>r[n]).filter(x=>x!=null),L=v.length||1,d=v.filter(x=>x instanceof Date).length,nu=v.filter(x=>typeof x==='number').length,u=new Set(v.map(String)).size;
+  let t='text';
+  if(d/L>=.7)t='date';
+  else if(nu/L>=.7){t=(u===v.length&&v.every(Number.isInteger)&&v.length>10)||/^(id|c[oó]d|ticket|linha)/i.test(n)?'text':'num'}
+  else if(u<=30&&(u<=12||u<L*.6))t='cat';
+  const c={name:n,t};
+  if(t==='num'){const x=v.filter(z=>typeof z==='number');c.pct=Math.min(...x)>=0&&Math.max(...x)<=1&&x.some(z=>!Number.isInteger(z))}
+  return c});
+ return{rows,cols};
+}
+function useSheet(name){
+ const p=parseSheet(wbk.Sheets[name]);if(!p||!p.rows.length){toast('A aba "'+name+'" não tem dados tabulares.');return}
+ S={rows:p.rows,cols:p.cols,f:[],page:1,ps:10,sort:null,q:'',cf:{},dfrom:'',dto:'',nmin:'',nmax:'',gr:'M',top:10,m:'count'};
+ S.rows.forEach(r=>SM.set(r,S.cols.map(c=>fmt(r[c.name],c)).join(' ').toLowerCase()));
+ const cat=S.cols.filter(c=>c.t==='cat'),num=S.cols.filter(c=>c.t==='num'),dat=S.cols.filter(c=>c.t==='date');
+ const pick=(l,re,fb)=>(l.find(c=>re.test(c.name))||fb||{}).name||'';
+ S.g=pick(cat,/^frente consolidada$/i,cat.find(c=>/frente/i.test(c.name))||cat[0]);
+ S.s=pick(cat,/^status$/i,cat.find(c=>/status/i.test(c.name))||cat[1]||cat[0]);
+ S.dc=pick(dat,/data planejada/i,dat[0]);S.nc=num[0]?.name||'';
+ const sel=(k,list,cur)=>`<div><label class="lbl">${k}</label>${list}</div>`;
+ const catOpts=cat.map(c=>opt(c.name,c.name)).join('')||opt('','—');
+ const mOpts=opt('count','Contagem de registros')+num.map(c=>(c.pct?'':opt('sum:'+c.name,'Soma de '+c.name))+opt('avg:'+c.name,'Média de '+c.name)).join('');
+ $('#ana').innerHTML=
+  `<div><label class="lbl">Agrupar por</label><select data-k="g" class="ctl">${catOpts}</select></div>`+
+  `<div><label class="lbl">Distribuir por</label><select data-k="s" class="ctl">${catOpts}</select></div>`+
+  `<div class="col-span-2"><label class="lbl">Métrica</label><select data-k="m" class="ctl">${mOpts}</select></div>`+
+  `<div><label class="lbl">Coluna de data</label><select data-k="dc" class="ctl">${dat.map(c=>opt(c.name,c.name)).join('')||opt('','—')}</select></div>`+
+  `<div><label class="lbl">Período</label><select data-k="gr" class="ctl">${opt('W','Semana')}${opt('M','Mês',1)}${opt('Q','Trimestre')}${opt('Y','Ano')}</select></div>`+
+  `<div><label class="lbl">Itens no ranking</label><select data-k="top" class="ctl">${[5,10,15,20].map(n=>opt(n,n,n===10)).join('')}</select></div>`;
+ ['g','s','dc'].forEach(k=>{const e=$('#ana [data-k='+k+']');if(e)e.value=S[k]});
+ $('#flt').innerHTML=cat.slice(0,6).map(c=>{const vs=[...new Set(S.rows.map(r=>String(r[c.name]??'(vazio)')))].sort();
+  return `<div><label class="lbl">${esc(c.name)}</label><select data-k="cf:${esc(c.name)}" class="ctl">${opt('','Todos')+vs.map(v=>opt(v,v)).join('')}</select></div>`}).join('')+
+  `<div><label class="lbl">Data inicial</label><input type="date" data-k="dfrom" class="ctl"></div><div><label class="lbl">Data final</label><input type="date" data-k="dto" class="ctl"></div>`+
+  `<div><label class="lbl">Filtro numérico</label><select data-k="nc" class="ctl">${num.map(c=>opt(c.name,c.name)).join('')||opt('','—')}</select></div>`+
+  `<div><label class="lbl">Mínimo</label><input type="number" data-k="nmin" class="ctl"></div><div><label class="lbl">Máximo</label><input type="number" data-k="nmax" class="ctl"></div>`;
+ $('#q').value='';$('#drop').classList.add('hidden');$('#app').classList.remove('hidden');applyF();
+}
+
+/* ---------- utilitários ---------- */
+const fmtD=d=>d.toLocaleDateString('pt-BR');
+function fmt(v,c){if(v==null)return'';if(v instanceof Date)return fmtD(v);if(typeof v==='number')return c&&c.pct?(v*100).toFixed(1).replace('.',',')+'%':v.toLocaleString('pt-BR',{maximumFractionDigits:2});return String(v)}
+const fN=v=>Math.abs(v)>=1e6?(v/1e6).toLocaleString('pt-BR',{maximumFractionDigits:2})+' mi':v.toLocaleString('pt-BR',{maximumFractionDigits:2});
+const col=n=>S.cols.find(c=>c.name===n);
+function agg(rows,m){if(m==='count')return rows.length;const i=m.indexOf(':'),k=m.slice(0,i),n=m.slice(i+1);const v=rows.map(r=>r[n]).filter(x=>typeof x==='number');if(!v.length)return 0;const s=v.reduce((a,b)=>a+b,0);return k==='avg'?s/v.length:s}
+const mPct=m=>m!=='count'&&col(m.slice(m.indexOf(':')+1))?.pct;
+const fM=(v,m)=>mPct(m)?(v*100).toFixed(1).replace('.',',')+'%':fN(v);
+const mName=m=>m==='count'?'Registros':(m.startsWith('avg')?'Média de ':'Soma de ')+m.slice(m.indexOf(':')+1);
+function grp(rows,c){const m=new Map();rows.forEach(r=>{const k=String(r[c]??'(vazio)');(m.get(k)||m.set(k,[]).get(k)).push(r)});return m}
+function pkey(d,g){const y=d.getFullYear(),mo=String(d.getMonth()+1).padStart(2,'0');
+ if(g==='Y')return''+y;if(g==='Q')return y+'-T'+(Math.floor(d.getMonth()/3)+1);if(g==='M')return y+'-'+mo;
+ const x=new Date(d);x.setDate(d.getDate()-((d.getDay()+6)%7));return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0')}
+function plabel(k,g){if(g==='M'){const[y,m]=k.split('-');return m+'/'+y}if(g==='W'){const[y,m,d]=k.split('-');return d+'/'+m+'/'+y}if(g==='Q'){const[y,q]=k.split('-');return q+'/'+y}return k}
+function series(rows){if(!S.dc)return[];const m=new Map();rows.forEach(r=>{const d=r[S.dc];if(d instanceof Date){const k=pkey(d,S.gr);(m.get(k)||m.set(k,[]).get(k)).push(r)}});
+ return[...m.entries()].sort((a,b)=>a[0]<b[0]?-1:1).map(([k,v])=>({k,l:plabel(k,S.gr),rows:v,v:agg(v,S.m)}))}
+const dl=(c,p)=>p==null||!isFinite(p)?'<span class="mu">—</span>':`<span style="color:${p>=0?'#16a34a':'#e11d48'}">${p>=0?'▲':'▼'} ${Math.abs(p).toFixed(1).replace('.',',')}%</span>`;
+
+/* ---------- filtros ---------- */
+function applyF(){
+ const q=(S.q||'').toLowerCase(),a=S.dfrom&&new Date(S.dfrom+'T00:00:00'),b=S.dto&&new Date(S.dto+'T23:59:59');
+ S.f=S.rows.filter(r=>{
+  for(const c in S.cf)if(S.cf[c]&&String(r[c]??'(vazio)')!==S.cf[c])return false;
+  if(a||b){const d=r[S.dc];if(!(d instanceof Date)||(a&&d<a)||(b&&d>b))return false}
+  if(S.nmin!==''||S.nmax!==''){const v=r[S.nc];if(typeof v!=='number'||(S.nmin!==''&&v<+S.nmin)||(S.nmax!==''&&v>+S.nmax))return false}
+  return !q||SM.get(r).includes(q)});
+ S.page=1;render();
+}
+document.addEventListener('input',e=>{const k=e.target.dataset&&e.target.dataset.k;if(!k)return;const v=e.target.value;
+ if(k.startsWith('cf:'))S.cf[k.slice(3)]=v;else S[k]=(k==='ps'||k==='top')?+v:v;
+ clearTimeout(T);T=setTimeout(()=>{FLT.includes(k)||k.startsWith('cf:')?applyF():(k==='ps'&&(S.page=1),render())},k==='q'?200:0)});
+$('#clr').onclick=()=>{S.cf={};S.q=S.dfrom=S.dto=S.nmin=S.nmax='';document.querySelectorAll('#flt [data-k],#q').forEach(e=>e.value=e.tagName==='SELECT'&&e.dataset.k==='nc'?S.nc:'');applyF()};
+
+/* ---------- render ---------- */
+function mk(id,cfg){charts[id]&&charts[id].destroy();charts[id]=new Chart($('#'+id),cfg)}
+function render(){
+ const f=S.f,m=S.m,dk=isDark();Chart.defaults.color=dk?'#8fa0b8':'#475569';Chart.defaults.borderColor=dk?'#25324a':'#e2e8f0';Chart.defaults.animation=false;Chart.defaults.maintainAspectRatio=false;
+ $('#cnt').textContent=f.length.toLocaleString('pt-BR')+' de '+S.rows.length.toLocaleString('pt-BR')+' registros';
+ const ser=series(f),K=[['Registros',f.length.toLocaleString('pt-BR'),'de '+S.rows.length.toLocaleString('pt-BR')+' no total']];
+ S.cols.filter(c=>c.t==='num').slice(0,3).forEach(c=>{const v=f.map(r=>r[c.name]).filter(x=>typeof x==='number'),s=v.reduce((a,b)=>a+b,0),av=v.length?s/v.length:0;K.push(c.pct?[c.name,fmt(av,c),'média']:[c.name,fN(s),'média '+fN(av)])});
+ if(S.dc){const d=f.map(r=>r[S.dc]).filter(x=>x instanceof Date).sort((a,b)=>a-b);if(d.length)K.push(['Período dos dados',fmtD(d[0]),'até '+fmtD(d[d.length-1])])}
+ if(ser.length>1){const l=ser[ser.length-1],p=ser[ser.length-2];K.push(['Último vs anterior',dl(0,p.v?(l.v-p.v)/Math.abs(p.v)*100:null),l.l+' vs '+p.l])}
+ if(S.s){const g=[...grp(f,S.s).entries()].sort((a,b)=>b[1].length-a[1].length)[0];if(g)K.push(['Maior em '+S.s,esc(g[0]),(g[1].length/f.length*100).toFixed(0)+'% dos registros'])}
+ $('#kpi').innerHTML=K.slice(0,6).map(k=>`<div class="card p-4"><div class="text-xs mu truncate">${esc(k[0])}</div><div class="text-2xl font-semibold mt-1 truncate">${k[1]}</div><div class="text-xs mu mt-1 truncate">${k[2]}</div></div>`).join('');
+
+ // distribuição
+ const sm=m.startsWith('avg')?'count':m;$('#t1').textContent=S.s?`${mName(sm)} por ${S.s}`:'Distribuição';
+ let ds=[...grp(f,S.s).entries()].map(([k,v])=>[k,agg(v,sm)]).sort((a,b)=>b[1]-a[1]);if(ds.length>8){const o=ds.slice(7).reduce((a,b)=>a+b[1],0);ds=ds.slice(0,7).concat([['Outros',o]])}
+ mk('c1',{type:'bar',data:{labels:ds.map(x=>x[0]),datasets:[{data:ds.map(x=>x[1]),backgroundColor:PAL[0],borderRadius:4}]},options:{indexAxis:'y',plugins:{legend:{display:false}}}});
+ $('#t2').textContent=S.s?'Participação em '+S.s:'Participação';
+ mk('c2',{type:'doughnut',data:{labels:ds.map(x=>x[0]),datasets:[{data:ds.map(x=>x[1]),backgroundColor:PAL,borderColor:dk?'#131c2e':'#fff'}]},options:{plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}}}});
+
+ // evolução + empilhado
+ $('#t3').textContent=S.dc?`${mName(m)} por período (${{W:'semana',M:'mês',Q:'trimestre',Y:'ano'}[S.gr]})`:'Evolução (selecione uma coluna de data)';
+ const cum=[];ser.reduce((a,x)=>(cum.push(a+x.v),a+x.v),0);const stk=!m.startsWith('avg');
+ const top=[...grp(f,S.g).entries()].map(([k,v])=>[k,agg(v,m)]).sort((a,b)=>b[1]-a[1]);
+ const tg=top.slice(0,6).map(x=>x[0]);
+ mk('c3',{data:{labels:ser.map(x=>x.l),datasets:[
+  ...(S.g?tg.map((g,i)=>({type:'bar',label:g,stack:'s',data:ser.map(x=>agg(x.rows.filter(r=>String(r[S.g]??'(vazio)')===g),m)),backgroundColor:PAL[i%8]})):[{type:'bar',label:mName(m),data:ser.map(x=>x.v),backgroundColor:PAL[0]}]),
+  ...(stk?[{type:'line',label:'Acumulado',data:cum,yAxisID:'y2',borderColor:dk?'#e6edf7':'#0f172a',pointRadius:2,tension:.3}]:[])]},
+  options:{interaction:{mode:'index',intersect:false},scales:{x:{stacked:stk},y:{stacked:stk,beginAtZero:true},y2:{position:'right',grid:{drawOnChartArea:false},display:stk}},plugins:{legend:{labels:{boxWidth:10,font:{size:11}}}}}});
+
+ // ranking
+ $('#t4').textContent=S.g?`Ranking de ${S.g}`:'Ranking';const mx=Math.max(...top.map(x=>Math.abs(x[1])),1),tot=top.reduce((a,b)=>a+b[1],0);
+ $('#rank').innerHTML=top.slice(0,S.top).map((x,i)=>`<div><div class="flex justify-between text-xs gap-2"><span class="truncate"><span class="mu">${i+1}.</span> ${esc(x[0])}</span><span class="font-medium shrink-0">${fM(x[1],m)}${m.startsWith('avg')?'':' <span class="mu">('+(tot?x[1]/tot*100:0).toFixed(0)+'%)</span>'}</span></div><div class="bar mt-1" style="width:${Math.max(2,Math.abs(x[1])/mx*100)}%;background:${PAL[i%8]}"></div></div>`).join('')||'<p class="mu text-sm">Sem categorias para ranquear.</p>';
+
+ // comparativo
+ $('#cmp').innerHTML=ser.length?`<thead><tr><th>Período</th><th>${esc(mName(m))}</th><th>Variação</th><th>Variação %</th><th>Registros</th></tr></thead><tbody>`+ser.map((x,i)=>{const p=ser[i-1],d=p?x.v-p.v:null;return`<tr><td>${x.l}</td><td>${fM(x.v,m)}</td><td>${d==null?'—':(d>=0?'+':'')+fM(d,m)}</td><td>${p?dl(0,p.v?d/Math.abs(p.v)*100:null):'—'}</td><td>${x.rows.length}</td></tr>`}).join('')+'</tbody>':'<tbody><tr><td>Esta planilha não tem coluna de data identificada.</td></tr></tbody>';
+
+ // tabela
+ let rows=f.slice();if(S.sort){const{c,d}=S.sort;rows.sort((a,b)=>{const x=a[c],y=b[c];if(x==null)return 1;if(y==null)return-1;return(x>y?1:x<y?-1:0)*d})}
+ const pages=Math.max(1,Math.ceil(rows.length/S.ps));S.page=Math.min(S.page,pages);const st=(S.page-1)*S.ps;
+ $('#tbl').innerHTML='<thead><tr>'+S.cols.map(c=>`<th data-s="${esc(c.name)}">${esc(c.name)}${S.sort&&S.sort.c===c.name?(S.sort.d>0?' ▲':' ▼'):''}</th>`).join('')+'</tr></thead><tbody>'+rows.slice(st,st+S.ps).map(r=>'<tr>'+S.cols.map(c=>`<td title="${esc(fmt(r[c.name],c))}"${c.t==='num'?' style="text-align:right"':''}>${esc(fmt(r[c.name],c))}</td>`).join('')+'</tr>').join('')+'</tbody>';
+ const b=(l,p,dis)=>`<button class="btn" data-p="${p}" ${dis?'disabled style="opacity:.4"':''}>${l}</button>`;
+ $('#pg').innerHTML=`<span class="text-xs mu">${rows.length?st+1:0}–${Math.min(st+S.ps,rows.length)} de ${rows.length}</span><div class="flex gap-2 items-center">${b('«',1,S.page===1)}${b('‹',S.page-1,S.page===1)}<span class="text-xs px-2">Página ${S.page} de ${pages}</span>${b('›',S.page+1,S.page===pages)}${b('»',pages,S.page===pages)}</div>`;
+}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-s]'),p=e.target.closest('[data-p]');
+ if(t){const c=t.dataset.s;S.sort=S.sort&&S.sort.c===c?{c,d:-S.sort.d}:{c,d:1};render()}
+ if(p&&!p.disabled){S.page=+p.dataset.p;render()}});
+
+/* ---------- exportação ---------- */
+$('#bx').onclick=()=>{
+ if(!S.f.length)return toast('Carregue um arquivo antes de exportar.');
+ const wb=XLSX.utils.book_new(),m=S.m,top=[...grp(S.f,S.g).entries()].map(([k,v])=>[k,agg(v,m),v.length]).sort((a,b)=>b[1]-a[1]);
+ const res=[['Resumo do painel'],['Arquivo',$('#fname').textContent],['Registros filtrados',S.f.length],['Métrica',mName(m)],[],['Ranking de '+S.g,mName(m),'Registros'],...top];
+ series(S.f).forEach((x,i,a)=>{if(!i)res.push([],['Período',mName(m),'Variação %']);res.push([x.l,x.v,i&&a[i-1].v?(x.v-a[i-1].v)/Math.abs(a[i-1].v):''])});
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(res),'Resumo');
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.f),'Dados filtrados');
+ XLSX.writeFile(wb,'painel_exportado.xlsx',{cellDates:true});
+};
+$('#bp').onclick=()=>{
+ if(!S.f.length)return toast('Carregue um arquivo antes de exportar.');
+ const d=isDark(),ps=S.ps;setDark(false);S.ps=S.f.length||1;render();
+ setTimeout(()=>{window.print();S.ps=ps;setDark(d);render()},300);
+ toast('Na janela de impressão, escolha "Salvar como PDF".');
+};
+</script>
+</body>
+</html>
