@@ -263,3 +263,36 @@ $('#bp').onclick=()=>{
 </script>
 </body>
 </html>
+<script>
+const URL_PLANILHA = "./planilha.xlsx";
+
+async function carregarPlanilhaPadrao() {
+  try {
+    const response = await fetch(URL_PLANILHA, { cache: "no-cache" });
+    if (!response.ok) throw new Error("Arquivo não encontrado em " + URL_PLANILHA);
+
+    const buffer = await response.arrayBuffer();
+    wbk = XLSX.read(buffer, { type: "array", cellDates: true });
+
+    const nomeAba = wbk.SheetNames[0];
+
+    $('#fname').textContent = 'planilha.xlsx';
+    $('#sheet').innerHTML = wbk.SheetNames
+      .map(n => `<option value="${n}">${n}</option>`)
+      .join('');
+
+    $('#shw').classList.toggle('hidden', wbk.SheetNames.length < 2);
+    $('#sheet').value = nomeAba;
+    useSheet(nomeAba);
+
+    // opcional: mostrar leve confirmação
+    // toast('Planilha carregada automaticamente.');
+  } catch (err) {
+    // fallback: upload manual continua funcionando
+    toast('Nenhuma planilha automática encontrada. Use "Escolher arquivo".');
+  }
+}
+
+// tenta carregar a planilha automaticamente ao abrir
+carregarPlanilhaPadrao();
+</script>
