@@ -104,7 +104,7 @@ function loadFile(file){
  r.onload=e=>{try{
   wbk=XLSX.read(e.target.result,{type:csv?'string':'array',cellDates:true});
   $('#fname').textContent=file.name;$('#sheet').innerHTML=wbk.SheetNames.map(n=>opt(n,n)).join('');
-  $('#shw').classList.toggle('hidden',wbk.SheetNames.length<2);
+  $('#shw').classList.toggle('hidden', wbk.SheetNames.length<2);
   const ini=wbk.SheetNames.find(n=>/atividades\s*micro/i.test(n))||wbk.SheetNames[0];$('#sheet').value=ini;useSheet(ini);
  }catch(err){toast('Não foi possível ler o arquivo: '+err.message)}};
  csv?r.readAsText(file):r.readAsArrayBuffer(file);
@@ -260,10 +260,8 @@ $('#bp').onclick=()=>{
  setTimeout(()=>{window.print();S.ps=ps;setDark(d);render()},300);
  toast('Na janela de impressão, escolha "Salvar como PDF".');
 };
-</script>
-</body>
-</html>
-<script>
+
+/* ---------- GitHub Pages / site estático: carregar XLSX automáticamente ---------- */
 const URL_PLANILHA = "./planilha.xlsx";
 
 async function carregarPlanilhaPadrao() {
@@ -285,14 +283,16 @@ async function carregarPlanilhaPadrao() {
     $('#sheet').value = nomeAba;
     useSheet(nomeAba);
 
-    // opcional: mostrar leve confirmação
+    // opcional: mensagem de confirmação
     // toast('Planilha carregada automaticamente.');
   } catch (err) {
-    // fallback: upload manual continua funcionando
+    // Mantém o upload manual funcionando normalmente
     toast('Nenhuma planilha automática encontrada. Use "Escolher arquivo".');
   }
 }
 
-// tenta carregar a planilha automaticamente ao abrir
+// tenta carregar automaticamente ao abrir o site
 carregarPlanilhaPadrao();
 </script>
+</body>
+</html>
